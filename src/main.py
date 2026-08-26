@@ -1,6 +1,7 @@
 import requests
 import os
 from bs4 import BeautifulSoup
+from datetime import datetime, timezone
 from urllib.parse import urljoin
 import time
 
@@ -70,6 +71,35 @@ def discover_book_urls():
     print(
         f"catalogue_pages={page_num} discovered={len(all_urls)} unique_urls={len(unique_urls)}")
     return unique_urls
+
+
+def extract_book(url, source_page):
+    cache_name = url.split("/catalogue/")[-1].replace("/", "_")
+    html = fetch_page(url, cache_name)
+    soup = get_soup(html)
+
+    product_area = soup.select_one("div.product_main")
+    title = product_area.select_one("h1").text.strip()
+
+    price_text = soup.select_one("p.price_color").text.strip()
+    availability_text = soup.select_one("p.availability").text.strip()
+
+    rating_tag = soup.select_one("p.star-rating")
+    rating_text = rating_tag["class"][1] if rating_tag else None
+
+    desc_tag = soup.select_one("#product_description ~ p")
+    description = desc_tag.text.strip() if desc_tag else None
+
+    return {
+        "title": title,
+        "product_url": url,
+        "price_text": price_text,
+        "availability_text": availability_text,
+        "rating_text": rating_text,
+        "description": description,
+        "source_page": source_page,
+        "fetched_at": datetime.now(timezone.utc).isoformat()
+    }
 
 
 if __name__ == "__main__":
