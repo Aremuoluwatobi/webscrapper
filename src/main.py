@@ -4,10 +4,26 @@ from bs4 import BeautifulSoup
 from datetime import datetime, timezone
 from urllib.parse import urljoin
 import time
+from pydantic import BaseModel, HttpUrl
+import re
+import json
+
 
 USER_AGENT = "FlyRankInternshipA9/1.0 (+https://github.com/yourusername/your-repo)"
 TIMEOUT = 10
 CACHE_DIR = "cache"
+
+
+class Book(BaseModel):
+    title: str
+    product_url: HttpUrl
+    price_gbp: float
+    price_text: str
+    availability_text: str
+    rating_text: str | None
+    description: str | None
+    source_page: str
+    fetched_at: str
 
 
 def fetch_page(url, cache_filename):
@@ -100,6 +116,42 @@ def extract_book(url, source_page):
         "source_page": source_page,
         "fetched_at": datetime.now(timezone.utc).isoformat()
     }
+
+
+def normalize_and_validate(raw_records):
+    valid, errors = [], []
+    for r in raw_records:
+        try:
+            price_num = float(re.sub(r"[^\d.]", "", r["price_text"]))
+            record = Book(
+                title=r["title"],
+                product_url=r["product_url"],
+                price_gbp=price_num,
+                price_text=r["price_text"],
+                availability_text=r["availability_text"],
+                rating_text=r["rating_text"],
+                description=r["description"],
+                source_page=r["source_page"],
+                fetched_at=r["fetched_at"]
+            )
+            valid.append(record.model_dump(mode="json"))
+        except Exception as e:
+            errors.append({"record": r, "reason": str(e)})
+
+    # idempotency: dedupe by canonical URL
+    seen, deduped = set(), []
+    for v in valid:
+        if v["product_url"] not in seen:
+            seen.add(v["product_url"])
+            deduped.append(v)
+
+    os.makedirs("output", exist_ok=True)
+    with open("output/books.json", "w", encoding="utf-8") as f:
+        json.dump(deduped, f, indent=2)
+    with open("output/errors.json", "w", encoding="utf-8") as f:
+        json.dump(errors, f, indent=2)
+
+    return deduped, errors
 
 
 if __name__ == "__main__":
