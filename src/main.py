@@ -36,6 +36,42 @@ def fetch_page(url, cache_filename):
     return html
 
 
+def get_soup(html):
+    return BeautifulSoup(html, "html.parser")
+
+
+def discover_book_urls():
+    base_url = "https://books.toscrape.com/catalogue/page-1.html"
+    all_urls = []
+    page_num = 1
+    current_url = base_url
+
+    while True:
+        cache_name = f"catalogue-page-{page_num}.html"
+        html = fetch_page(current_url, cache_name)
+        soup = get_soup(html)
+
+        for a in soup.select("h3 a"):
+            book_url = urljoin(current_url, a["href"])
+            all_urls.append(book_url)
+
+        next_link = soup.select_one("li.next a")
+        if not next_link:
+            break
+
+        if page_num > 1:
+            time.sleep(0.5)  # politeness delay between real page requests
+
+        current_url = urljoin(current_url, next_link["href"])
+        page_num += 1
+
+    # removes duplicates, keeps order
+    unique_urls = list(dict.fromkeys(all_urls))
+    print(
+        f"catalogue_pages={page_num} discovered={len(all_urls)} unique_urls={len(unique_urls)}")
+    return unique_urls
+
+
 if __name__ == "__main__":
     html = fetch_page(
         "https://books.toscrape.com/catalogue/page-1.html", "catalogue-page-1.html")
