@@ -9,7 +9,8 @@ import re
 import json
 
 
-USER_AGENT = "FlyRankInternshipA9/1.0 (+https://github.com/yourusername/your-repo)"
+USER_AGENT = "FlyRankInternshipA9/1.0 (+https://github.com/Aremuoluwatobi/webscrapper.git)"
+
 TIMEOUT = 10
 CACHE_DIR = "cache"
 
@@ -154,6 +155,42 @@ def normalize_and_validate(raw_records):
     return deduped, errors
 
 
+def run_scraper():
+    start_time = datetime.now(timezone.utc)
+    urls = discover_book_urls()
+
+    # Stage 5 checkpoint proof: add one fake URL on purpose
+    urls.append(
+        "https://books.toscrape.com/catalogue/this-book-does-not-exist/index.html")
+
+    raw_records = []
+    failed_pages = 0
+
+    for url in urls:
+        try:
+            record = extract_book(
+                url, "https://books.toscrape.com/catalogue/page-1.html")
+            raw_records.append(record)
+        except Exception as e:
+            print(f"FAILED: {url} -> {e}")
+            failed_pages += 1
+
+    valid, errors = normalize_and_validate(raw_records)
+
+    end_time = datetime.now(timezone.utc)
+    report = {
+        "start_time": start_time.isoformat(),
+        "duration_seconds": (end_time - start_time).total_seconds(),
+        "pages_fetched": len(urls),
+        "valid_records": len(valid),
+        "invalid_records": len(errors),
+        "failed_pages": failed_pages
+    }
+    with open("output/run-report.json", "w", encoding="utf-8") as f:
+        json.dump(report, f, indent=2)
+
+    print(f"Run complete: {report}")
+
+
 if __name__ == "__main__":
-    html = fetch_page(
-        "https://books.toscrape.com/catalogue/page-1.html", "catalogue-page-1.html")
+    run_scraper()
